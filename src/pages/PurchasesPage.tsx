@@ -11,6 +11,7 @@ interface PurchasesPageProps {
 
 export function PurchasesPage({ data, setData }: PurchasesPageProps) {
   const [materialId, setMaterialId] = useState(data.materials[0]?.id ?? "");
+  const [specification, setSpecification] = useState("8mm");
   const [quantity, setQuantity] = useState(1);
   const [totalCost, setTotalCost] = useState(1);
   const [purchaseDate, setPurchaseDate] = useState(today());
@@ -23,6 +24,7 @@ export function PurchasesPage({ data, setData }: PurchasesPageProps) {
       setData((current) =>
         applyPurchase(current, {
           materialId,
+          specification,
           quantity,
           totalCost,
           purchaseDate,
@@ -48,7 +50,16 @@ export function PurchasesPage({ data, setData }: PurchasesPageProps) {
               <option value="">请选择</option>
               {data.materials.map((material) => (
                 <option key={material.id} value={material.id}>
-                  {material.name} {material.specification}
+                  {material.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="规格">
+            <select value={specification} onChange={(event) => setSpecification(event.target.value)}>
+              {beadSizes.map((size) => (
+                <option key={size} value={`${size}mm`}>
+                  {size}mm
                 </option>
               ))}
             </select>
@@ -79,6 +90,7 @@ export function PurchasesPage({ data, setData }: PurchasesPageProps) {
           columns={[
             { header: "日期", render: (row) => row.purchaseDate },
             { header: "材料", render: (row) => data.materials.find((item) => item.id === row.materialId)?.name ?? "已删除材料" },
+            { header: "规格", render: (row) => row.specification },
             { header: "数量", render: (row) => row.quantity },
             { header: "总成本", render: (row) => `¥${row.totalCost.toFixed(2)}` },
             { header: "备注", render: (row) => row.notes || "-" }
@@ -92,3 +104,5 @@ export function PurchasesPage({ data, setData }: PurchasesPageProps) {
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
+
+const beadSizes = Array.from({ length: 15 }, (_, index) => index + 2);

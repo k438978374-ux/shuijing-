@@ -7,8 +7,8 @@ import {
 import type {
   AppData,
   FinishedGoodBatch,
-  Material,
   MaterialLine,
+  MaterialStock,
   ProductionRecord,
   PurchaseRecord,
   SaleRecord
@@ -37,48 +37,64 @@ export function createId(prefix: string): string {
 }
 
 export function applyPurchase(data: AppData, input: PurchaseInput): AppData {
-  if (input.quantity <= 0 || input.totalCost <= 0) {
+  if (!input.specification || input.quantity <= 0 || input.totalCost <= 0) {
     throw new Error("进货数量和总成本必须大于 0");
   }
 
-  const materials = data.materials.map((material) => {
-    if (material.id !== input.materialId) {
-      return material;
-    }
-    const currentQuantity = material.currentQuantity + input.quantity;
-    const remainingTotalCost = roundMoney(material.remainingTotalCost + input.totalCost);
-    return {
-      ...material,
-      currentQuantity,
-      remainingTotalCost,
-      averageUnitCost: calculateAverageUnitCost(
-        material.currentQuantity,
-        material.remainingTotalCost,
-        input.quantity,
-        input.totalCost
-      )
-    };
-  });
-
-  if (!materials.some((material) => material.id === input.materialId)) {
+  if (!data.materials.some((material) => material.id === input.materialId)) {
     throw new Error("找不到对应材料");
   }
 
+  const existingStock = data.materialStocks.find(
+    (stock) =>
+      stock.materialId === input.materialId && stock.specification === input.specification
+  );
+  const materialStocks = existingStock
+    ? data.materialStocks.map((stock) => {
+        if (stock.id !== existingStock.id) {
+          return stock;
+        }
+        const currentQuantity = stock.currentQuantity + input.quantity;
+        const remainingTotalCost = roundMoney(stock.remainingTotalCost + input.totalCost);
+        return {
+          ...stock,
+          currentQuantity,
+          remainingTotalCost,
+          averageUnitCost: calculateAverageUnitCost(
+            stock.currentQuantity,
+            stock.remainingTotalCost,
+            input.quantity,
+            input.totalCost
+          )
+        };
+      })
+    : [
+        ...data.materialStocks,
+        {
+          id: createId("stock"),
+          materialId: input.materialId,
+          specification: input.specification,
+          currentQuantity: input.quantity,
+          remainingTotalCost: roundMoney(input.totalCost),
+          averageUnitCost: input.totalCost / input.quantity
+        }
+      ];
+
   return {
     ...data,
-    materials,
+    materialStocks,
     purchases: [...data.purchases, { id: createId("purchase"), ...input }]
   };
 }
 
 export function calculateRecipeMaterialCost(
-  materials: Material[],
+  data: AppData,
   materialLines: MaterialLine[]
 ): number {
   return roundMoney(
     materialLines.reduce((sum, line) => {
-      const material = findMaterial(materials, line.materialId);
-      return sum + material.averageUnitCost * line.quantity;
+      const stock = findMaterialStock(data, line);
+      return sum + stock.averageUnitCost * line.quantity;
     }, 0)
   );
 }
@@ -89,17 +105,15 @@ export function applyProduction(data: AppData, input: ProductionInput): AppData 
   }
 
   for (const line of input.materialLines) {
-    const material = findMaterial(data.materials, line.materialId);
+    const material = data.materials.find((item) => item.id === line.materialId);
+    const stock = findMaterialStock(data, line);
     const requiredQuantity = line.quantity * input.quantityMade;
-    if (material.currentQuantity < requiredQuantity) {
-      throw new Error(`材料库存不足：${material.name}`);
+    if (stock.currentQuantity < requiredQuantity) {
+      throw new Error(`材料库存不足：${material?.name ?? "未知材料"}`);
     }
   }
 
-  const materialCostPerUnit = calculateRecipeMaterialCost(
-    data.materials,
-    input.materialLines
-  );
+  const materialCostPerUnit = calculateRecipeMaterialCost(data, input.materialLines);
   const finishedUnitCost = calculateFinishedUnitCost(
     materialCostPerUnit,
     input.packagingCostPerUnit,
@@ -124,17 +138,20 @@ export function applyProduction(data: AppData, input: ProductionInput): AppData 
     notes: input.notes
   };
 
-  const materials = data.materials.map((material) => {
-    const line = input.materialLines.find((item) => item.materialId === material.id);
+  const materialStocks = data.materialStocks.map((stock) => {
+    const line = input.materialLines.find(
+      (item) =>
+        item.materialId === stock.materialId && item.specification === stock.specification
+    );
     if (!line) {
-      return material;
+      return stock;
     }
     const usedQuantity = line.quantity * input.quantityMade;
-    const usedCost = roundMoney(material.averageUnitCost * usedQuantity);
-    const currentQuantity = material.currentQuantity - usedQuantity;
-    const remainingTotalCost = roundMoney(Math.max(0, material.remainingTotalCost - usedCost));
+    const usedCost = roundMoney(stock.averageUnitCost * usedQuantity);
+    const currentQuantity = stock.currentQuantity - usedQuantity;
+    const remainingTotalCost = roundMoney(Math.max(0, stock.remainingTotalCost - usedCost));
     return {
-      ...material,
+      ...stock,
       currentQuantity,
       remainingTotalCost,
       averageUnitCost: currentQuantity > 0 ? remainingTotalCost / currentQuantity : 0
@@ -143,7 +160,7 @@ export function applyProduction(data: AppData, input: ProductionInput): AppData 
 
   return {
     ...data,
-    materials,
+    materialStocks,
     productions: [...data.productions, productionRecord],
     finishedGoods: [...data.finishedGoods, finishedBatch]
   };
@@ -192,10 +209,14 @@ export function applySale(data: AppData, input: SaleInput): AppData {
   };
 }
 
-function findMaterial(materials: Material[], materialId: string): Material {
-  const material = materials.find((item) => item.id === materialId);
-  if (!material) {
-    throw new Error("找不到对应材料");
+function findMaterialStock(data: AppData, line: MaterialLine): MaterialStock {
+  const stock = data.materialStocks.find(
+    (item) =>
+      item.materialId === line.materialId && item.specification === line.specification
+  );
+  if (!stock) {
+    const material = data.materials.find((item) => item.id === line.materialId);
+    throw new Error(`材料库存不足：${material?.name ?? "未知材料"}`);
   }
-  return material;
+  return stock;
 }

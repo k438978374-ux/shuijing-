@@ -21,7 +21,7 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
 
-  const materialCost = calculateRecipeMaterialCost(data.materials, materialLines);
+  const materialCost = calculateRecipeMaterialCost(data, materialLines);
   const totalCost = calculateFinishedUnitCost(materialCost, packagingCostPerUnit, laborCostPerUnit);
   const estimatedProfit = suggestedSalePrice - totalCost;
 
@@ -35,7 +35,7 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
       ...current,
       {
         materialId: firstMaterial.id,
-        specification: getMaterialSpecifications(firstMaterial.specification)[0] ?? "",
+        specification: getMaterialSpecifications(data, firstMaterial.id)[0] ?? "",
         quantity: 1
       }
     ]);
@@ -101,7 +101,7 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
                       updateLine(index, {
                         ...line,
                         materialId: event.target.value,
-                        specification: getMaterialSpecifications(material?.specification ?? "")[0] ?? ""
+                        specification: getMaterialSpecifications(data, material?.id ?? "")[0] ?? ""
                       });
                     }}
                   >
@@ -117,7 +117,7 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
                       value={line.specification ?? ""}
                       onChange={(event) => updateLine(index, { ...line, specification: event.target.value })}
                     >
-                      {getMaterialSpecifications(data.materials.find((material) => material.id === line.materialId)?.specification ?? "").map((specification) => (
+                      {getMaterialSpecifications(data, line.materialId).map((specification) => (
                         <option key={specification} value={specification}>
                           {specification}
                         </option>
@@ -177,7 +177,7 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
             {
               header: "预计成本",
               render: (row) =>
-                `¥${calculateFinishedUnitCost(calculateRecipeMaterialCost(data.materials, row.materialLines), row.packagingCostPerUnit, row.laborCostPerUnit).toFixed(2)}`
+                `¥${calculateFinishedUnitCost(calculateRecipeMaterialCost(data, row.materialLines), row.packagingCostPerUnit, row.laborCostPerUnit).toFixed(2)}`
             },
             { header: "建议售价", render: (row) => `¥${row.suggestedSalePrice.toFixed(2)}` },
             { header: "备注", render: (row) => row.notes || "-" }
@@ -188,11 +188,14 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
   );
 }
 
-function getMaterialSpecifications(specification: string): string[] {
-  return specification
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+function getMaterialSpecifications(data: AppData, materialId: string): string[] {
+  return Array.from(
+    new Set(
+      data.materialStocks
+        .filter((stock) => stock.materialId === materialId)
+        .map((stock) => stock.specification)
+    )
+  );
 }
 
 function formatMaterialLine(data: AppData, line: MaterialLine): string {

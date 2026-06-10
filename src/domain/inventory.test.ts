@@ -9,40 +9,43 @@ import type { AppData, Material } from "./types";
 
 describe("inventory operations", () => {
   it("applies purchase and updates material stock with weighted average cost", () => {
-    const data = makeData([makeMaterial("m1", "粉晶", 100, 50)]);
+    const data = makeData([makeMaterial("m1", "粉晶")], [
+      makeStock("m1", "8mm", 100, 50)
+    ]);
     const next = applyPurchase(data, {
       materialId: "m1",
+      specification: "8mm",
       quantity: 100,
       totalCost: 70,
       purchaseDate: "2026-06-10",
       notes: ""
     });
 
-    expect(next.materials[0].currentQuantity).toBe(200);
-    expect(next.materials[0].remainingTotalCost).toBe(120);
-    expect(next.materials[0].averageUnitCost).toBeCloseTo(0.6);
+    expect(next.materialStocks[0].currentQuantity).toBe(200);
+    expect(next.materialStocks[0].remainingTotalCost).toBe(120);
+    expect(next.materialStocks[0].averageUnitCost).toBeCloseTo(0.6);
     expect(next.purchases).toHaveLength(1);
   });
 
   it("calculates recipe material cost from average costs", () => {
-    const data = makeData([
-      makeMaterial("m1", "粉晶", 100, 50),
-      makeMaterial("m2", "隔片", 50, 25)
-    ]);
+    const data = makeData(
+      [makeMaterial("m1", "粉晶"), makeMaterial("m2", "隔片")],
+      [makeStock("m1", "8mm", 100, 50), makeStock("m2", "4mm", 50, 25)]
+    );
 
     expect(
-      calculateRecipeMaterialCost(data.materials, [
-        { materialId: "m1", quantity: 12 },
-        { materialId: "m2", quantity: 4 }
+      calculateRecipeMaterialCost(data, [
+        { materialId: "m1", specification: "8mm", quantity: 12 },
+        { materialId: "m2", specification: "4mm", quantity: 4 }
       ])
     ).toBeCloseTo(8);
   });
 
   it("applies production and creates a finished goods batch", () => {
-    const data = makeData([
-      makeMaterial("m1", "粉晶", 100, 50),
-      makeMaterial("m2", "隔片", 50, 25)
-    ]);
+    const data = makeData(
+      [makeMaterial("m1", "粉晶"), makeMaterial("m2", "隔片")],
+      [makeStock("m1", "8mm", 100, 50), makeStock("m2", "4mm", 50, 25)]
+    );
 
     const next = applyProduction(data, {
       recipeId: "",
@@ -50,8 +53,8 @@ describe("inventory operations", () => {
       styleName: "粉晶定制",
       productionDate: "2026-06-10",
       materialLines: [
-        { materialId: "m1", quantity: 12 },
-        { materialId: "m2", quantity: 4 }
+        { materialId: "m1", specification: "8mm", quantity: 12 },
+        { materialId: "m2", specification: "4mm", quantity: 4 }
       ],
       quantityMade: 2,
       packagingCostPerUnit: 3,
@@ -60,15 +63,17 @@ describe("inventory operations", () => {
       notes: ""
     });
 
-    expect(next.materials.find((item) => item.id === "m1")?.currentQuantity).toBe(76);
-    expect(next.materials.find((item) => item.id === "m2")?.currentQuantity).toBe(42);
+    expect(next.materialStocks.find((item) => item.materialId === "m1")?.currentQuantity).toBe(76);
+    expect(next.materialStocks.find((item) => item.materialId === "m2")?.currentQuantity).toBe(42);
     expect(next.finishedGoods[0].quantityMade).toBe(2);
     expect(next.finishedGoods[0].quantityRemaining).toBe(2);
     expect(next.finishedGoods[0].unitCost).toBe(19);
   });
 
   it("rejects production when material stock is insufficient", () => {
-    const data = makeData([makeMaterial("m1", "粉晶", 5, 2.5)]);
+    const data = makeData([makeMaterial("m1", "粉晶")], [
+      makeStock("m1", "8mm", 5, 2.5)
+    ]);
 
     expect(() =>
       applyProduction(data, {
@@ -76,7 +81,7 @@ describe("inventory operations", () => {
         customName: "粉晶定制",
         styleName: "粉晶定制",
         productionDate: "2026-06-10",
-        materialLines: [{ materialId: "m1", quantity: 12 }],
+        materialLines: [{ materialId: "m1", specification: "8mm", quantity: 12 }],
         quantityMade: 1,
         packagingCostPerUnit: 3,
         laborCostPerUnit: 8,
@@ -88,7 +93,7 @@ describe("inventory operations", () => {
 
   it("applies sale and calculates profit", () => {
     const data: AppData = {
-      ...makeData([]),
+      ...makeData([], []),
       finishedGoods: [
         {
           id: "batch-1",
@@ -122,29 +127,37 @@ describe("inventory operations", () => {
   });
 });
 
-function makeMaterial(
-  id: string,
-  name: string,
-  currentQuantity: number,
-  remainingTotalCost: number
-): Material {
+function makeMaterial(id: string, name: string): Material {
   return {
     id,
     name,
     category: "crystal",
-    specification: "8mm",
-    currentQuantity,
-    remainingTotalCost,
-    averageUnitCost: remainingTotalCost / currentQuantity,
     lowStockThreshold: 10,
     imageDataUrl: "",
     notes: ""
   };
 }
 
-function makeData(materials: Material[]): AppData {
+function makeStock(
+  materialId: string,
+  specification: string,
+  currentQuantity: number,
+  remainingTotalCost: number
+) {
+  return {
+    id: `stock-${materialId}-${specification}`,
+    materialId,
+    specification,
+    currentQuantity,
+    remainingTotalCost,
+    averageUnitCost: remainingTotalCost / currentQuantity
+  };
+}
+
+function makeData(materials: Material[], materialStocks: ReturnType<typeof makeStock>[]): AppData {
   return {
     materials,
+    materialStocks,
     purchases: [],
     recipes: [],
     productions: [],

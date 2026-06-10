@@ -6,14 +6,16 @@ interface DashboardPageProps {
 }
 
 export function DashboardPage({ data }: DashboardPageProps) {
-  const materialValue = data.materials.reduce((sum, item) => sum + item.remainingTotalCost, 0);
+  const materialValue = data.materialStocks.reduce((sum, item) => sum + item.remainingTotalCost, 0);
   const finishedValue = data.finishedGoods.reduce(
     (sum, item) => sum + item.quantityRemaining * item.unitCost,
     0
   );
   const revenue = data.sales.reduce((sum, item) => sum + item.totalRevenue, 0);
   const profit = data.sales.reduce((sum, item) => sum + item.profit, 0);
-  const lowStock = data.materials.filter((item) => item.currentQuantity <= item.lowStockThreshold);
+  const lowStock = data.materials.filter(
+    (item) => getMaterialQuantity(data, item.id) <= item.lowStockThreshold
+  );
 
   return (
     <div className="page-stack">
@@ -35,7 +37,7 @@ export function DashboardPage({ data }: DashboardPageProps) {
           <ul className="plain-list">
             {lowStock.map((item) => (
               <li key={item.id}>
-                {item.name}：剩余 {item.currentQuantity}，提醒线 {item.lowStockThreshold}
+                {item.name}：剩余 {getMaterialQuantity(data, item.id)}，提醒线 {item.lowStockThreshold}
               </li>
             ))}
           </ul>
@@ -43,4 +45,10 @@ export function DashboardPage({ data }: DashboardPageProps) {
       </section>
     </div>
   );
+}
+
+function getMaterialQuantity(data: AppData, materialId: string) {
+  return data.materialStocks
+    .filter((stock) => stock.materialId === materialId)
+    .reduce((sum, stock) => sum + stock.currentQuantity, 0);
 }

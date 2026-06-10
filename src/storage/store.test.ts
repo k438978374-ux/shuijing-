@@ -9,6 +9,7 @@ describe("store", () => {
   it("creates empty app data", () => {
     expect(createEmptyData()).toEqual({
       materials: [],
+      materialStocks: [],
       purchases: [],
       recipes: [],
       productions: [],
@@ -27,10 +28,6 @@ describe("store", () => {
       id: "m1",
       name: "粉晶",
       category: "crystal",
-      specification: "8mm",
-      currentQuantity: 100,
-      remainingTotalCost: 50,
-      averageUnitCost: 0.5,
       lowStockThreshold: 10,
       imageDataUrl: "",
       notes: ""

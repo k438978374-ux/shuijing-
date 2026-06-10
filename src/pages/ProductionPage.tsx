@@ -25,7 +25,7 @@ export function ProductionPage({ data, setData }: ProductionPageProps) {
 
   const recipe = data.recipes.find((item) => item.id === recipeId);
   const activeLines = mode === "recipe" && recipe ? recipe.materialLines : materialLines;
-  const materialCost = calculateRecipeMaterialCost(data.materials, activeLines);
+  const materialCost = calculateRecipeMaterialCost(data, activeLines);
   const unitCost = calculateFinishedUnitCost(materialCost, packagingCostPerUnit, laborCostPerUnit);
 
   useEffect(() => {
@@ -41,7 +41,14 @@ export function ProductionPage({ data, setData }: ProductionPageProps) {
       setError("请先新增材料");
       return;
     }
-    setMaterialLines((current) => [...current, { materialId: firstMaterial.id, quantity: 1 }]);
+    setMaterialLines((current) => [
+      ...current,
+      {
+        materialId: firstMaterial.id,
+        specification: getMaterialSpecifications(data, firstMaterial.id)[0] ?? "",
+        quantity: 1
+      }
+    ]);
   }
 
   function updateLine(index: number, line: MaterialLine) {
@@ -114,14 +121,37 @@ export function ProductionPage({ data, setData }: ProductionPageProps) {
               <div className="line-list">
                 {materialLines.map((line, index) => (
                   <div className="line-row" key={`${line.materialId}-${index}`}>
-                    <select value={line.materialId} onChange={(event) => updateLine(index, { ...line, materialId: event.target.value })}>
+                    <select
+                      aria-label="材料"
+                      value={line.materialId}
+                      onChange={(event) => {
+                        updateLine(index, {
+                          ...line,
+                          materialId: event.target.value,
+                          specification: getMaterialSpecifications(data, event.target.value)[0] ?? ""
+                        });
+                      }}
+                    >
                       {data.materials.map((material) => (
                         <option key={material.id} value={material.id}>
                           {material.name}
                         </option>
                       ))}
                     </select>
-                    <input min="1" type="number" value={line.quantity} onChange={(event) => updateLine(index, { ...line, quantity: Number(event.target.value) })} />
+                    <label className="compact-field">
+                      <span>规格</span>
+                      <select
+                        value={line.specification ?? ""}
+                        onChange={(event) => updateLine(index, { ...line, specification: event.target.value })}
+                      >
+                        {getMaterialSpecifications(data, line.materialId).map((specification) => (
+                          <option key={specification} value={specification}>
+                            {specification}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <input aria-label="数量" min="1" type="number" value={line.quantity} onChange={(event) => updateLine(index, { ...line, quantity: Number(event.target.value) })} />
                   </div>
                 ))}
                 <button className="secondary-button" type="button" onClick={addLine}>
@@ -161,4 +191,14 @@ export function ProductionPage({ data, setData }: ProductionPageProps) {
 
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function getMaterialSpecifications(data: AppData, materialId: string): string[] {
+  return Array.from(
+    new Set(
+      data.materialStocks
+        .filter((stock) => stock.materialId === materialId)
+        .map((stock) => stock.specification)
+    )
+  );
 }

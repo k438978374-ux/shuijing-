@@ -5,6 +5,7 @@ const STORAGE_KEY = "crystal-inventory-system:v1";
 export function createEmptyData(): AppData {
   return {
     materials: [],
+    materialStocks: [],
     purchases: [],
     recipes: [],
     productions: [],

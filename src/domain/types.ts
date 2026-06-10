@@ -10,18 +10,24 @@ export interface Material {
   id: string;
   name: string;
   category: MaterialCategory;
-  specification: string;
-  currentQuantity: number;
-  remainingTotalCost: number;
-  averageUnitCost: number;
   lowStockThreshold: number;
   imageDataUrl: string;
   notes: string;
 }
 
+export interface MaterialStock {
+  id: string;
+  materialId: string;
+  specification: string;
+  currentQuantity: number;
+  remainingTotalCost: number;
+  averageUnitCost: number;
+}
+
 export interface PurchaseRecord {
   id: string;
   materialId: string;
+  specification: string;
   quantity: number;
   totalCost: number;
   purchaseDate: string;
@@ -93,6 +99,7 @@ export interface SaleRecord {
 
 export interface AppData {
   materials: Material[];
+  materialStocks: MaterialStock[];
   purchases: PurchaseRecord[];
   recipes: Recipe[];
   productions: ProductionRecord[];

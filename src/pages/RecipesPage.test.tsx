@@ -37,13 +37,27 @@ function dataWithSizedMaterial(): AppData {
         id: "m1",
         name: "粉晶",
         category: "crystal",
-        specification: "6mm, 8mm, 10mm",
-        currentQuantity: 100,
-        remainingTotalCost: 50,
-        averageUnitCost: 0.5,
         lowStockThreshold: 10,
         imageDataUrl: "",
         notes: ""
+      }
+    ],
+    materialStocks: [
+      {
+        id: "stock-6",
+        materialId: "m1",
+        specification: "6mm",
+        currentQuantity: 50,
+        remainingTotalCost: 25,
+        averageUnitCost: 0.5
+      },
+      {
+        id: "stock-8",
+        materialId: "m1",
+        specification: "8mm",
+        currentQuantity: 50,
+        remainingTotalCost: 25,
+        averageUnitCost: 0.5
       }
     ],
     purchases: [],

@@ -19,12 +19,9 @@ const categoryLabels: Record<MaterialCategory, string> = {
   other: "其他"
 };
 
-const beadSizes = Array.from({ length: 15 }, (_, index) => index + 2);
-
 export function MaterialsPage({ data, setData }: MaterialsPageProps) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState<MaterialCategory>("crystal");
-  const [selectedSizes, setSelectedSizes] = useState<number[]>([]);
   const [lowStockThreshold, setLowStockThreshold] = useState(10);
   const [imageDataUrl, setImageDataUrl] = useState("");
   const [notes, setNotes] = useState("");
@@ -40,17 +37,12 @@ export function MaterialsPage({ data, setData }: MaterialsPageProps) {
       id: createId("material"),
       name: name.trim(),
       category,
-      specification: formatSizes(selectedSizes),
-      currentQuantity: 0,
-      remainingTotalCost: 0,
-      averageUnitCost: 0,
       lowStockThreshold,
       imageDataUrl,
       notes: notes.trim()
     };
     setData((current) => ({ ...current, materials: [...current.materials, material] }));
     setName("");
-    setSelectedSizes([]);
     setLowStockThreshold(10);
     setImageDataUrl("");
     setNotes("");
@@ -74,25 +66,6 @@ export function MaterialsPage({ data, setData }: MaterialsPageProps) {
               ))}
             </select>
           </FormField>
-          <div className="form-field">
-            <span>规格</span>
-            <div className="size-grid" aria-label="规格">
-              {beadSizes.map((size) => {
-                const selected = selectedSizes.includes(size);
-                return (
-                  <button
-                    key={size}
-                    className={selected ? "size-chip selected" : "size-chip"}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => toggleSize(size, setSelectedSizes)}
-                  >
-                    {size}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
           <FormField label="低库存提醒">
             <input
               min="0"
@@ -122,14 +95,15 @@ export function MaterialsPage({ data, setData }: MaterialsPageProps) {
             { header: "图片", render: (row) => <Thumb src={row.imageDataUrl} /> },
             { header: "名称", render: (row) => row.name },
             { header: "分类", render: (row) => categoryLabels[row.category] },
-            { header: "规格", render: (row) => row.specification || "-" },
-            { header: "库存", render: (row) => row.currentQuantity },
-            { header: "单颗成本", render: (row) => `¥${row.averageUnitCost.toFixed(2)}` },
-            { header: "剩余成本", render: (row) => `¥${row.remainingTotalCost.toFixed(2)}` },
+            { header: "规格数", render: (row) => getStocks(data, row.id).length },
+            { header: "总库存", render: (row) => getStocks(data, row.id).reduce((sum, stock) => sum + stock.currentQuantity, 0) },
+            { header: "库存成本", render: (row) => `¥${getStocks(data, row.id).reduce((sum, stock) => sum + stock.remainingTotalCost, 0).toFixed(2)}` },
             {
               header: "状态",
-              render: (row) =>
-                row.currentQuantity <= row.lowStockThreshold ? <span className="status danger">低库存</span> : <span className="status">正常</span>
+              render: (row) => {
+                const quantity = getStocks(data, row.id).reduce((sum, stock) => sum + stock.currentQuantity, 0);
+                return quantity <= row.lowStockThreshold ? <span className="status danger">低库存</span> : <span className="status">正常</span>;
+              }
             }
           ]}
         />
@@ -142,14 +116,6 @@ function Thumb({ src }: { src: string }) {
   return src ? <img className="table-thumb" src={src} alt="" /> : <span className="muted">无</span>;
 }
 
-function toggleSize(size: number, setSelectedSizes: React.Dispatch<React.SetStateAction<number[]>>) {
-  setSelectedSizes((current) =>
-    current.includes(size)
-      ? current.filter((item) => item !== size)
-      : [...current, size].sort((a, b) => a - b)
-  );
-}
-
-function formatSizes(sizes: number[]) {
-  return sizes.map((size) => `${size}mm`).join(", ");
+function getStocks(data: AppData, materialId: string) {
+  return data.materialStocks.filter((stock) => stock.materialId === materialId);
 }
