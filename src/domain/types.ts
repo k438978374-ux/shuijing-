@@ -30,6 +30,7 @@ export interface PurchaseRecord {
 
 export interface MaterialLine {
   materialId: string;
+  specification?: string;
   quantity: number;
 }
 

@@ -31,7 +31,14 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
       setError("请先新增材料");
       return;
     }
-    setMaterialLines((current) => [...current, { materialId: firstMaterial.id, quantity: 1 }]);
+    setMaterialLines((current) => [
+      ...current,
+      {
+        materialId: firstMaterial.id,
+        specification: getMaterialSpecifications(firstMaterial.specification)[0] ?? "",
+        quantity: 1
+      }
+    ]);
   }
 
   function updateLine(index: number, line: MaterialLine) {
@@ -86,14 +93,39 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
             <div className="line-list">
               {materialLines.map((line, index) => (
                 <div className="line-row" key={`${line.materialId}-${index}`}>
-                  <select value={line.materialId} onChange={(event) => updateLine(index, { ...line, materialId: event.target.value })}>
+                  <select
+                    aria-label="材料"
+                    value={line.materialId}
+                    onChange={(event) => {
+                      const material = data.materials.find((item) => item.id === event.target.value);
+                      updateLine(index, {
+                        ...line,
+                        materialId: event.target.value,
+                        specification: getMaterialSpecifications(material?.specification ?? "")[0] ?? ""
+                      });
+                    }}
+                  >
                     {data.materials.map((material) => (
                       <option key={material.id} value={material.id}>
                         {material.name}
                       </option>
                     ))}
                   </select>
+                  <label className="compact-field">
+                    <span>规格</span>
+                    <select
+                      value={line.specification ?? ""}
+                      onChange={(event) => updateLine(index, { ...line, specification: event.target.value })}
+                    >
+                      {getMaterialSpecifications(data.materials.find((material) => material.id === line.materialId)?.specification ?? "").map((specification) => (
+                        <option key={specification} value={specification}>
+                          {specification}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <input
+                    aria-label="数量"
                     min="1"
                     type="number"
                     value={line.quantity}
@@ -141,7 +173,7 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
           columns={[
             { header: "图片", render: (row) => (row.imageDataUrl ? <img className="table-thumb" src={row.imageDataUrl} alt="" /> : <span className="muted">无</span>) },
             { header: "名称", render: (row) => row.name },
-            { header: "材料", render: (row) => `${row.materialLines.length} 种` },
+            { header: "材料", render: (row) => row.materialLines.map((line) => formatMaterialLine(data, line)).join("；") },
             {
               header: "预计成本",
               render: (row) =>
@@ -154,4 +186,18 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
       </section>
     </div>
   );
+}
+
+function getMaterialSpecifications(specification: string): string[] {
+  return specification
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatMaterialLine(data: AppData, line: MaterialLine): string {
+  const material = data.materials.find((item) => item.id === line.materialId);
+  const name = material?.name ?? "已删除材料";
+  const specification = line.specification ? ` ${line.specification}` : "";
+  return `${name}${specification} x${line.quantity}`;
 }

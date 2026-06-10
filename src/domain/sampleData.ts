@@ -34,8 +34,8 @@ export function createSampleData(): AppData {
         id: "recipe-rose-bracelet",
         name: "粉晶温柔款",
         materialLines: [
-          { materialId: "material-rose-quartz", quantity: 18 },
-          { materialId: "material-spacer", quantity: 4 }
+          { materialId: "material-rose-quartz", specification: "8mm", quantity: 18 },
+          { materialId: "material-spacer", specification: "4mm", quantity: 4 }
         ],
         packagingCostPerUnit: 3,
         laborCostPerUnit: 8,

@@ -306,9 +306,19 @@ th {
 
 .line-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 88px auto;
+  grid-template-columns: minmax(0, 1fr) 104px 88px auto;
   gap: 8px;
   align-items: center;
+}
+
+.compact-field {
+  display: grid;
+  gap: 4px;
+}
+
+.compact-field span {
+  color: #65726c;
+  font-size: 12px;
 }
 
 .size-grid {
