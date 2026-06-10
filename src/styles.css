@@ -308,7 +308,7 @@ th {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 104px 88px auto;
   gap: 8px;
-  align-items: center;
+  align-items: end;
 }
 
 .compact-field {
