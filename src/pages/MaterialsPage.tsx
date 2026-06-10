@@ -19,10 +19,12 @@ const categoryLabels: Record<MaterialCategory, string> = {
   other: "其他"
 };
 
+const beadSizes = Array.from({ length: 15 }, (_, index) => index + 2);
+
 export function MaterialsPage({ data, setData }: MaterialsPageProps) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState<MaterialCategory>("crystal");
-  const [specification, setSpecification] = useState("");
+  const [selectedSizes, setSelectedSizes] = useState<number[]>([]);
   const [lowStockThreshold, setLowStockThreshold] = useState(10);
   const [imageDataUrl, setImageDataUrl] = useState("");
   const [notes, setNotes] = useState("");
@@ -38,7 +40,7 @@ export function MaterialsPage({ data, setData }: MaterialsPageProps) {
       id: createId("material"),
       name: name.trim(),
       category,
-      specification: specification.trim(),
+      specification: formatSizes(selectedSizes),
       currentQuantity: 0,
       remainingTotalCost: 0,
       averageUnitCost: 0,
@@ -48,7 +50,7 @@ export function MaterialsPage({ data, setData }: MaterialsPageProps) {
     };
     setData((current) => ({ ...current, materials: [...current.materials, material] }));
     setName("");
-    setSpecification("");
+    setSelectedSizes([]);
     setLowStockThreshold(10);
     setImageDataUrl("");
     setNotes("");
@@ -72,9 +74,25 @@ export function MaterialsPage({ data, setData }: MaterialsPageProps) {
               ))}
             </select>
           </FormField>
-          <FormField label="规格">
-            <input value={specification} onChange={(event) => setSpecification(event.target.value)} placeholder="如 8mm" />
-          </FormField>
+          <div className="form-field">
+            <span>规格</span>
+            <div className="size-grid" aria-label="规格">
+              {beadSizes.map((size) => {
+                const selected = selectedSizes.includes(size);
+                return (
+                  <button
+                    key={size}
+                    className={selected ? "size-chip selected" : "size-chip"}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => toggleSize(size, setSelectedSizes)}
+                  >
+                    {size}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <FormField label="低库存提醒">
             <input
               min="0"
@@ -122,4 +140,16 @@ export function MaterialsPage({ data, setData }: MaterialsPageProps) {
 
 function Thumb({ src }: { src: string }) {
   return src ? <img className="table-thumb" src={src} alt="" /> : <span className="muted">无</span>;
+}
+
+function toggleSize(size: number, setSelectedSizes: React.Dispatch<React.SetStateAction<number[]>>) {
+  setSelectedSizes((current) =>
+    current.includes(size)
+      ? current.filter((item) => item !== size)
+      : [...current, size].sort((a, b) => a - b)
+  );
+}
+
+function formatSizes(sizes: number[]) {
+  return sizes.map((size) => `${size}mm`).join(", ");
 }

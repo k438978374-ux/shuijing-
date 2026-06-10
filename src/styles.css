@@ -311,6 +311,28 @@ th {
   align-items: center;
 }
 
+.size-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.size-chip {
+  min-height: 34px;
+  border: 1px solid #cfd7d1;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #17211f;
+  font-weight: 700;
+}
+
+.size-chip:hover,
+.size-chip.selected {
+  border-color: #26735b;
+  background: #26735b;
+  color: #ffffff;
+}
+
 .segmented {
   display: inline-grid;
   grid-template-columns: repeat(2, 1fr);
