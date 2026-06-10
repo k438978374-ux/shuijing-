@@ -9,6 +9,9 @@ import {
   ReceiptText,
   ShoppingBag
 } from "lucide-react";
+import { AccessGate } from "./components/AccessGate";
+import { createSampleData } from "./domain/sampleData";
+import type { AppData } from "./domain/types";
 import { DashboardPage } from "./pages/DashboardPage";
 import { FinishedGoodsPage } from "./pages/FinishedGoodsPage";
 import { MaterialsPage } from "./pages/MaterialsPage";
@@ -17,8 +20,7 @@ import { PurchasesPage } from "./pages/PurchasesPage";
 import { RecipesPage } from "./pages/RecipesPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SalesPage } from "./pages/SalesPage";
-import { createSampleData } from "./domain/sampleData";
-import type { AppData } from "./domain/types";
+import { isCloudSyncEnabled, loadCloudData, saveCloudData } from "./storage/cloudStore";
 import { loadData, saveData } from "./storage/store";
 
 type PageKey =
@@ -45,64 +47,143 @@ const navItems = [
 export function App() {
   const [activePage, setActivePage] = useState<PageKey>("dashboard");
   const [data, setDataState] = useState<AppData>(() => loadData());
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [syncMessage, setSyncMessage] = useState(() =>
+    isCloudSyncEnabled() ? "正在连接云端存储..." : "当前仅使用本地存储"
+  );
+  const accessPassword = import.meta.env.VITE_ACCESS_PASSWORD ?? "";
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateFromCloud() {
+      if (!isCloudSyncEnabled()) {
+        setIsHydrated(true);
+        return;
+      }
+
+      try {
+        const cloudData = await loadCloudData();
+        if (cancelled) {
+          return;
+        }
+
+        if (cloudData) {
+          setDataState(cloudData);
+          saveData(cloudData);
+          setSyncMessage("已连接云端存储");
+        } else {
+          setSyncMessage("云端已连接，首次保存后会自动建档");
+        }
+      } catch {
+        if (!cancelled) {
+          setSyncMessage("云端连接失败，当前先使用本地存储");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsHydrated(true);
+        }
+      }
+    }
+
+    void hydrateFromCloud();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
     saveData(data);
-  }, [data]);
+
+    if (!isCloudSyncEnabled()) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function syncToCloud() {
+      try {
+        await saveCloudData(data);
+        if (!cancelled) {
+          setSyncMessage("已同步到云端");
+        }
+      } catch {
+        if (!cancelled) {
+          setSyncMessage("云端同步失败，数据仍已保存在本机");
+        }
+      }
+    }
+
+    void syncToCloud();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data, isHydrated]);
 
   const pageTitle = useMemo(
     () => navItems.find((item) => item.key === activePage)?.label ?? "总览",
     [activePage]
   );
 
-  function setData(updater: (data: AppData) => AppData) {
+  function setData(updater: (current: AppData) => AppData) {
     setDataState((current) => updater(current));
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <Gem size={24} />
-          <div>
-            <strong>水晶库存</strong>
-            <span>成本与利润</span>
+    <AccessGate password={accessPassword}>
+      <div className="app-shell">
+        <aside className="sidebar">
+          <div className="brand">
+            <Gem size={24} />
+            <div>
+              <strong>水晶库存</strong>
+              <span>成本与利润</span>
+            </div>
           </div>
-        </div>
-        <nav className="nav-list" aria-label="主导航">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.key}
-                className={activePage === item.key ? "nav-item active" : "nav-item"}
-                type="button"
-                onClick={() => setActivePage(item.key)}
-                title={item.label}
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-        <button className="secondary-button" type="button" onClick={() => setDataState(createSampleData())}>
-          载入示例数据
-        </button>
-      </aside>
-      <main className="content-area">
-        <header className="topbar">
-          <h1>{pageTitle}</h1>
-        </header>
-        {activePage === "dashboard" ? <DashboardPage data={data} /> : null}
-        {activePage === "materials" ? <MaterialsPage data={data} setData={setData} /> : null}
-        {activePage === "purchases" ? <PurchasesPage data={data} setData={setData} /> : null}
-        {activePage === "recipes" ? <RecipesPage data={data} setData={setData} /> : null}
-        {activePage === "production" ? <ProductionPage data={data} setData={setData} /> : null}
-        {activePage === "finished" ? <FinishedGoodsPage data={data} /> : null}
-        {activePage === "sales" ? <SalesPage data={data} setData={setData} /> : null}
-        {activePage === "reports" ? <ReportsPage data={data} /> : null}
-      </main>
-    </div>
+          <nav className="nav-list" aria-label="主导航">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.key}
+                  className={activePage === item.key ? "nav-item active" : "nav-item"}
+                  type="button"
+                  onClick={() => setActivePage(item.key)}
+                  title={item.label}
+                >
+                  <Icon size={18} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+          <button className="secondary-button" type="button" onClick={() => setDataState(createSampleData())}>
+            载入示例数据
+          </button>
+        </aside>
+        <main className="content-area">
+          <header className="topbar">
+            <div>
+              <h1>{pageTitle}</h1>
+              <p className="muted topbar-subtext">{syncMessage}</p>
+            </div>
+          </header>
+          {activePage === "dashboard" ? <DashboardPage data={data} /> : null}
+          {activePage === "materials" ? <MaterialsPage data={data} setData={setData} /> : null}
+          {activePage === "purchases" ? <PurchasesPage data={data} setData={setData} /> : null}
+          {activePage === "recipes" ? <RecipesPage data={data} setData={setData} /> : null}
+          {activePage === "production" ? <ProductionPage data={data} setData={setData} /> : null}
+          {activePage === "finished" ? <FinishedGoodsPage data={data} /> : null}
+          {activePage === "sales" ? <SalesPage data={data} setData={setData} /> : null}
+          {activePage === "reports" ? <ReportsPage data={data} /> : null}
+        </main>
+      </div>
+    </AccessGate>
   );
 }
