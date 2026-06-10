@@ -1,0 +1,157 @@
+import { useState, type FormEvent } from "react";
+import { DataTable } from "../components/DataTable";
+import { FormField } from "../components/FormField";
+import { ImageInput } from "../components/ImageInput";
+import { calculateFinishedUnitCost } from "../domain/calculations";
+import { createId, calculateRecipeMaterialCost } from "../domain/inventory";
+import type { AppData, MaterialLine, Recipe } from "../domain/types";
+
+interface RecipesPageProps {
+  data: AppData;
+  setData: (updater: (data: AppData) => AppData) => void;
+}
+
+export function RecipesPage({ data, setData }: RecipesPageProps) {
+  const [name, setName] = useState("");
+  const [materialLines, setMaterialLines] = useState<MaterialLine[]>([]);
+  const [packagingCostPerUnit, setPackagingCostPerUnit] = useState(3);
+  const [laborCostPerUnit, setLaborCostPerUnit] = useState(8);
+  const [suggestedSalePrice, setSuggestedSalePrice] = useState(68);
+  const [imageDataUrl, setImageDataUrl] = useState("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState("");
+
+  const materialCost = calculateRecipeMaterialCost(data.materials, materialLines);
+  const totalCost = calculateFinishedUnitCost(materialCost, packagingCostPerUnit, laborCostPerUnit);
+  const estimatedProfit = suggestedSalePrice - totalCost;
+
+  function addLine() {
+    const firstMaterial = data.materials[0];
+    if (!firstMaterial) {
+      setError("请先新增材料");
+      return;
+    }
+    setMaterialLines((current) => [...current, { materialId: firstMaterial.id, quantity: 1 }]);
+  }
+
+  function updateLine(index: number, line: MaterialLine) {
+    setMaterialLines((current) => current.map((item, itemIndex) => (itemIndex === index ? line : item)));
+  }
+
+  function removeLine(index: number) {
+    setMaterialLines((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) {
+      setError("请填写款式名称");
+      return;
+    }
+    if (materialLines.length === 0) {
+      setError("请至少添加一种材料");
+      return;
+    }
+    const recipe: Recipe = {
+      id: createId("recipe"),
+      name: name.trim(),
+      materialLines,
+      packagingCostPerUnit,
+      laborCostPerUnit,
+      suggestedSalePrice,
+      imageDataUrl,
+      notes: notes.trim()
+    };
+    setData((current) => ({ ...current, recipes: [...current.recipes, recipe] }));
+    setName("");
+    setMaterialLines([]);
+    setPackagingCostPerUnit(3);
+    setLaborCostPerUnit(8);
+    setSuggestedSalePrice(68);
+    setImageDataUrl("");
+    setNotes("");
+    setError("");
+  }
+
+  return (
+    <div className="page-grid">
+      <section className="panel">
+        <h2>新增配方/款式</h2>
+        <form className="form-grid" onSubmit={handleSubmit}>
+          <FormField label="款式名称">
+            <input value={name} onChange={(event) => setName(event.target.value)} />
+          </FormField>
+          <div className="form-field">
+            <span>材料明细</span>
+            <div className="line-list">
+              {materialLines.map((line, index) => (
+                <div className="line-row" key={`${line.materialId}-${index}`}>
+                  <select value={line.materialId} onChange={(event) => updateLine(index, { ...line, materialId: event.target.value })}>
+                    {data.materials.map((material) => (
+                      <option key={material.id} value={material.id}>
+                        {material.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    min="1"
+                    type="number"
+                    value={line.quantity}
+                    onChange={(event) => updateLine(index, { ...line, quantity: Number(event.target.value) })}
+                  />
+                  <button className="text-button" type="button" onClick={() => removeLine(index)}>
+                    删除
+                  </button>
+                </div>
+              ))}
+              <button className="secondary-button" type="button" onClick={addLine}>
+                添加材料
+              </button>
+            </div>
+          </div>
+          <FormField label="包装成本/条">
+            <input min="0" step="0.01" type="number" value={packagingCostPerUnit} onChange={(event) => setPackagingCostPerUnit(Number(event.target.value))} />
+          </FormField>
+          <FormField label="手工成本/条">
+            <input min="0" step="0.01" type="number" value={laborCostPerUnit} onChange={(event) => setLaborCostPerUnit(Number(event.target.value))} />
+          </FormField>
+          <FormField label="建议售价">
+            <input min="0" step="0.01" type="number" value={suggestedSalePrice} onChange={(event) => setSuggestedSalePrice(Number(event.target.value))} />
+          </FormField>
+          <div className="cost-preview">
+            预计成本 ¥{totalCost.toFixed(2)}，预计利润 ¥{estimatedProfit.toFixed(2)}
+          </div>
+          <FormField label="款式图片">
+            <ImageInput value={imageDataUrl} onChange={setImageDataUrl} />
+          </FormField>
+          <FormField label="备注">
+            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
+          </FormField>
+          {error ? <p className="error-text">{error}</p> : null}
+          <button className="primary-button" type="submit">
+            保存配方
+          </button>
+        </form>
+      </section>
+      <section className="panel wide-panel">
+        <h2>款式列表</h2>
+        <DataTable
+          rows={data.recipes}
+          emptyText="还没有配方。"
+          columns={[
+            { header: "图片", render: (row) => (row.imageDataUrl ? <img className="table-thumb" src={row.imageDataUrl} alt="" /> : <span className="muted">无</span>) },
+            { header: "名称", render: (row) => row.name },
+            { header: "材料", render: (row) => `${row.materialLines.length} 种` },
+            {
+              header: "预计成本",
+              render: (row) =>
+                `¥${calculateFinishedUnitCost(calculateRecipeMaterialCost(data.materials, row.materialLines), row.packagingCostPerUnit, row.laborCostPerUnit).toFixed(2)}`
+            },
+            { header: "建议售价", render: (row) => `¥${row.suggestedSalePrice.toFixed(2)}` },
+            { header: "备注", render: (row) => row.notes || "-" }
+          ]}
+        />
+      </section>
+    </div>
+  );
+}
