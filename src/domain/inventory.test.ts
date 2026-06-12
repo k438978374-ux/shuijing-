@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyInventoryAdjustment,
+  applyMaterialStatusChange,
   applyProduction,
   applyPurchase,
   applySale,
@@ -8,7 +10,7 @@ import {
 import type { AppData, Material } from "./types";
 
 describe("inventory operations", () => {
-  it("applies purchase and updates material stock with weighted average cost", () => {
+  it("applies purchase as a separate material batch instead of merging costs", () => {
     const data = makeData([makeMaterial("m1", "粉晶")], [
       makeStock("m1", "8mm", 100, 50)
     ]);
@@ -23,54 +25,62 @@ describe("inventory operations", () => {
 
     expect(next.materialStocks[0].currentQuantity).toBe(200);
     expect(next.materialStocks[0].remainingTotalCost).toBe(120);
-    expect(next.materialStocks[0].averageUnitCost).toBeCloseTo(0.6);
-    expect(next.purchases).toHaveLength(1);
+    expect(next.materialBatches).toHaveLength(1);
+    expect(next.materialBatches[0]).toMatchObject({
+      materialId: "m1",
+      specification: "8mm",
+      originalQuantity: 100,
+      currentQuantity: 100,
+      totalCost: 70,
+      unitCost: 0.7
+    });
   });
 
-  it("calculates recipe material cost from average costs", () => {
-    const data = makeData(
-      [makeMaterial("m1", "粉晶"), makeMaterial("m2", "隔片")],
-      [makeStock("m1", "8mm", 100, 50), makeStock("m2", "4mm", 50, 25)]
-    );
+  it("calculates recipe material cost from FIFO batches", () => {
+    const data: AppData = {
+      ...makeData([makeMaterial("m1", "粉晶")], [makeStock("m1", "8mm", 150, 120)]),
+      materialBatches: [
+        makeBatch("b1", "m1", "8mm", 100, 50, "2026-06-01"),
+        makeBatch("b2", "m1", "8mm", 50, 70, "2026-06-10")
+      ]
+    };
 
     expect(
       calculateRecipeMaterialCost(data, [
-        { materialId: "m1", specification: "8mm", quantity: 12 },
-        { materialId: "m2", specification: "4mm", quantity: 4 }
+        { materialId: "m1", specification: "8mm", quantity: 120 }
       ])
-    ).toBeCloseTo(8);
+    ).toBe(78);
   });
 
-  it("applies production and creates a finished goods batch", () => {
-    const data = makeData(
-      [makeMaterial("m1", "粉晶"), makeMaterial("m2", "隔片")],
-      [makeStock("m1", "8mm", 100, 50), makeStock("m2", "4mm", 50, 25)]
-    );
+  it("applies production using FIFO batches and creates a finished goods batch", () => {
+    const data: AppData = {
+      ...makeData([makeMaterial("m1", "粉晶")], [makeStock("m1", "8mm", 150, 120)]),
+      materialBatches: [
+        makeBatch("b1", "m1", "8mm", 100, 50, "2026-06-01"),
+        makeBatch("b2", "m1", "8mm", 50, 70, "2026-06-10")
+      ]
+    };
 
     const next = applyProduction(data, {
       recipeId: "",
       customName: "粉晶定制",
       styleName: "粉晶定制",
-      productionDate: "2026-06-10",
-      materialLines: [
-        { materialId: "m1", specification: "8mm", quantity: 12 },
-        { materialId: "m2", specification: "4mm", quantity: 4 }
-      ],
-      quantityMade: 2,
+      productionDate: "2026-06-11",
+      materialLines: [{ materialId: "m1", specification: "8mm", quantity: 120 }],
+      quantityMade: 1,
       packagingCostPerUnit: 3,
       laborCostPerUnit: 8,
       imageDataUrl: "",
       notes: ""
     });
 
-    expect(next.materialStocks.find((item) => item.materialId === "m1")?.currentQuantity).toBe(76);
-    expect(next.materialStocks.find((item) => item.materialId === "m2")?.currentQuantity).toBe(42);
-    expect(next.finishedGoods[0].quantityMade).toBe(2);
-    expect(next.finishedGoods[0].quantityRemaining).toBe(2);
-    expect(next.finishedGoods[0].unitCost).toBe(19);
+    expect(next.materialBatches.find((item) => item.id === "b1")?.currentQuantity).toBe(0);
+    expect(next.materialBatches.find((item) => item.id === "b2")?.currentQuantity).toBe(30);
+    expect(next.materialStocks[0].currentQuantity).toBe(30);
+    expect(next.finishedGoods[0].unitCost).toBe(89);
   });
 
-  it("rejects production when material stock is insufficient", () => {
+  it("warns on insufficient production stock and can continue with negative stock", () => {
     const data = makeData([makeMaterial("m1", "粉晶")], [
       makeStock("m1", "8mm", 5, 2.5)
     ]);
@@ -88,7 +98,89 @@ describe("inventory operations", () => {
         imageDataUrl: "",
         notes: ""
       })
-    ).toThrow("材料库存不足：粉晶");
+    ).toThrow("粉晶 8mm 库存不够");
+
+    const next = applyProduction(data, {
+      recipeId: "",
+      customName: "粉晶定制",
+      styleName: "粉晶定制",
+      productionDate: "2026-06-10",
+      materialLines: [{ materialId: "m1", specification: "8mm", quantity: 12 }],
+      quantityMade: 1,
+      packagingCostPerUnit: 3,
+      laborCostPerUnit: 8,
+      imageDataUrl: "",
+      notes: "",
+      allowNegativeStock: true
+    });
+
+    expect(next.materialStocks[0].currentQuantity).toBe(-7);
+    expect(next.finishedGoods[0].styleName).toBe("粉晶定制");
+  });
+
+  it("records inventory adjustments with employee and password verification", () => {
+    const data: AppData = {
+      ...makeData([makeMaterial("m1", "粉晶")], [makeStock("m1", "8mm", 100, 50)]),
+      materialBatches: [makeBatch("b1", "m1", "8mm", 100, 50, "2026-06-01")]
+    };
+
+    const next = applyInventoryAdjustment(data, {
+      batchId: "b1",
+      newQuantity: 90,
+      employeeName: "小王",
+      reason: "盘点少10颗",
+      password: "750829"
+    });
+
+    expect(next.materialBatches[0].currentQuantity).toBe(90);
+    expect(next.materialStocks[0].currentQuantity).toBe(90);
+    expect(next.inventoryAdjustments[0]).toMatchObject({
+      batchId: "b1",
+      previousQuantity: 100,
+      newQuantity: 90,
+      quantityChange: -10,
+      employeeName: "小王",
+      reason: "盘点少10颗"
+    });
+    expect(next.auditLogs[0]).toMatchObject({
+      action: "inventory_adjustment",
+      employeeName: "小王"
+    });
+  });
+
+  it("rejects protected operations with the wrong password", () => {
+    const data: AppData = {
+      ...makeData([makeMaterial("m1", "粉晶")], [makeStock("m1", "8mm", 100, 50)]),
+      materialBatches: [makeBatch("b1", "m1", "8mm", 100, 50, "2026-06-01")]
+    };
+
+    expect(() =>
+      applyInventoryAdjustment(data, {
+        batchId: "b1",
+        newQuantity: 90,
+        employeeName: "小王",
+        reason: "盘点",
+        password: "wrong"
+      })
+    ).toThrow("密码不正确");
+  });
+
+  it("soft deletes materials and keeps an audit log", () => {
+    const data = makeData([makeMaterial("m1", "粉晶")], []);
+
+    const next = applyMaterialStatusChange(data, {
+      materialId: "m1",
+      isActive: false,
+      employeeName: "小王",
+      reason: "不再进货",
+      password: "750829"
+    });
+
+    expect(next.materials[0].isActive).toBe(false);
+    expect(next.auditLogs[0]).toMatchObject({
+      action: "material_deactivated",
+      employeeName: "小王"
+    });
   });
 
   it("applies sale and calculates profit", () => {
@@ -134,7 +226,8 @@ function makeMaterial(id: string, name: string): Material {
     category: "crystal",
     lowStockThreshold: 10,
     imageDataUrl: "",
-    notes: ""
+    notes: "",
+    isActive: true
   };
 }
 
@@ -158,10 +251,37 @@ function makeData(materials: Material[], materialStocks: ReturnType<typeof makeS
   return {
     materials,
     materialStocks,
+    materialBatches: [],
+    inventoryAdjustments: [],
+    auditLogs: [],
+    employees: [],
     purchases: [],
     recipes: [],
     productions: [],
     finishedGoods: [],
     sales: []
+  };
+}
+
+function makeBatch(
+  id: string,
+  materialId: string,
+  specification: string,
+  currentQuantity: number,
+  totalCost: number,
+  purchaseDate: string
+) {
+  return {
+    id,
+    purchaseId: `purchase-${id}`,
+    materialId,
+    specification,
+    originalQuantity: currentQuantity,
+    currentQuantity,
+    totalCost,
+    remainingTotalCost: totalCost,
+    unitCost: totalCost / currentQuantity,
+    purchaseDate,
+    notes: ""
   };
 }

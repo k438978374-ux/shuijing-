@@ -20,6 +20,10 @@ export function isCloudSyncEnabled(): boolean {
 }
 
 export function getCloudConfig(): CloudConfig | null {
+  if (import.meta.env.VITE_CLOUD_SYNC_ENABLED !== "true") {
+    return null;
+  }
+
   const rawUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 

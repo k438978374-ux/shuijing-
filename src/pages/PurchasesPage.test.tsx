@@ -6,15 +6,17 @@ import { PurchasesPage } from "./PurchasesPage";
 import type { AppData } from "../domain/types";
 
 describe("PurchasesPage", () => {
-  it("chooses one size when recording a purchase", async () => {
+  it("chooses one size when recording a purchase and shows material subtype", async () => {
     const user = userEvent.setup();
     const setData = vi.fn();
 
     render(<PurchasesPage data={dataWithMaterial()} setData={setData} />);
 
+    await user.click(screen.getByRole("button", { name: "+ 入库" }));
+    expect(screen.getByLabelText("材料")).toHaveDisplayValue("海蓝宝 / 天空蓝透体款");
     expect(screen.getByLabelText("规格")).toHaveDisplayValue("8mm");
     await user.selectOptions(screen.getByLabelText("规格"), "10mm");
-    await user.click(screen.getByRole("button", { name: "保存进货" }));
+    await user.click(screen.getByRole("button", { name: "保存入库" }));
 
     const updater = setData.mock.calls[0][0] as (data: AppData) => AppData;
     const next = updater(dataWithMaterial());
@@ -40,14 +42,20 @@ function dataWithMaterial(): AppData {
     materials: [
       {
         id: "m1",
-        name: "粉晶",
+        name: "海蓝宝",
+        subtype: "天空蓝透体款",
         category: "crystal",
         lowStockThreshold: 10,
         imageDataUrl: "",
-        notes: ""
+        notes: "",
+        isActive: true
       }
     ],
     materialStocks: [],
+    materialBatches: [],
+    inventoryAdjustments: [],
+    auditLogs: [],
+    employees: [],
     purchases: [],
     recipes: [],
     productions: [],

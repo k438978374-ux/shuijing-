@@ -6,13 +6,40 @@ export type MaterialCategory =
   | "packaging"
   | "other";
 
+export interface MaterialGroup {
+  id: string;
+  code: string;
+  name: string;
+  isActive?: boolean;
+}
+
+export interface MaterialSubtype {
+  id: string;
+  groupId: string;
+  code: string;
+  name: string;
+  isActive?: boolean;
+}
+
+export interface MaterialColor {
+  id: string;
+  code: string;
+  name: string;
+  isActive?: boolean;
+}
+
 export interface Material {
   id: string;
   name: string;
-  category: MaterialCategory;
+  groupId?: string;
+  subtypeId?: string;
+  colorId?: string;
+  subtype?: string;
+  category?: MaterialCategory;
   lowStockThreshold: number;
   imageDataUrl: string;
   notes: string;
+  isActive?: boolean;
 }
 
 export interface MaterialStock {
@@ -37,7 +64,58 @@ export interface PurchaseRecord {
 export interface MaterialLine {
   materialId: string;
   specification?: string;
+  batchId?: string;
   quantity: number;
+}
+
+export interface MaterialBatch {
+  id: string;
+  purchaseId: string;
+  materialId: string;
+  specification: string;
+  originalQuantity: number;
+  currentQuantity: number;
+  totalCost: number;
+  remainingTotalCost: number;
+  unitCost: number;
+  purchaseDate: string;
+  notes: string;
+}
+
+export interface Employee {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
+export interface InventoryAdjustmentRecord {
+  id: string;
+  batchId: string;
+  materialId: string;
+  specification: string;
+  previousQuantity: number;
+  newQuantity: number;
+  quantityChange: number;
+  previousTotalCost: number;
+  newTotalCost: number;
+  employeeName: string;
+  reason: string;
+  adjustedAt: string;
+}
+
+export type AuditAction =
+  | "inventory_adjustment"
+  | "material_deactivated"
+  | "material_reactivated";
+
+export interface AuditLog {
+  id: string;
+  action: AuditAction;
+  targetId: string;
+  employeeName: string;
+  reason: string;
+  createdAt: string;
+  details: string;
 }
 
 export interface Recipe {
@@ -99,7 +177,14 @@ export interface SaleRecord {
 
 export interface AppData {
   materials: Material[];
+  materialGroups?: MaterialGroup[];
+  materialSubtypes?: MaterialSubtype[];
+  materialColors?: MaterialColor[];
   materialStocks: MaterialStock[];
+  materialBatches: MaterialBatch[];
+  inventoryAdjustments: InventoryAdjustmentRecord[];
+  auditLogs: AuditLog[];
+  employees: Employee[];
   purchases: PurchaseRecord[];
   recipes: Recipe[];
   productions: ProductionRecord[];

@@ -14,6 +14,16 @@ describe("cloudStore", () => {
   it("disables cloud sync when env vars are missing", () => {
     vi.stubEnv("VITE_SUPABASE_URL", "");
     vi.stubEnv("VITE_SUPABASE_ANON_KEY", "");
+    vi.stubEnv("VITE_CLOUD_SYNC_ENABLED", "true");
+
+    expect(isCloudSyncEnabled()).toBe(false);
+    expect(getCloudConfig()).toBeNull();
+  });
+
+  it("disables cloud sync unless the explicit cloud flag is enabled", () => {
+    vi.stubEnv("VITE_SUPABASE_URL", "https://demo.supabase.co");
+    vi.stubEnv("VITE_SUPABASE_ANON_KEY", "demo-key");
+    vi.stubEnv("VITE_CLOUD_SYNC_ENABLED", "");
 
     expect(isCloudSyncEnabled()).toBe(false);
     expect(getCloudConfig()).toBeNull();
@@ -22,6 +32,7 @@ describe("cloudStore", () => {
   it("normalizes the project url from a rest endpoint", () => {
     vi.stubEnv("VITE_SUPABASE_URL", "https://demo.supabase.co/rest/v1/");
     vi.stubEnv("VITE_SUPABASE_ANON_KEY", "demo-key");
+    vi.stubEnv("VITE_CLOUD_SYNC_ENABLED", "true");
 
     expect(getCloudConfig()).toMatchObject({
       url: "https://demo.supabase.co",
