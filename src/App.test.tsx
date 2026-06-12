@@ -29,7 +29,22 @@ describe("App navigation", () => {
     expect(screen.getByRole("button", { name: "大类" })).toBeInTheDocument();
   });
 
-  it("clears legacy local goods even when an older cleanup marker exists", async () => {
+  it("renames purchases to inventory and expands inventory child pages", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("crystal-inventory-access", "granted");
+
+    render(<App />);
+
+    expect(screen.getByRole("button", { name: "库存" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "入库" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "库存明细" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "库存明细" }));
+
+    expect(screen.getByRole("heading", { name: "库存明细", level: 1 })).toBeInTheDocument();
+  });
+
+  it("keeps existing local inventory data on startup", async () => {
     localStorage.setItem("crystal-inventory-access", "granted");
     localStorage.setItem("crystal-inventory-system:cleared-test-goods-2026-06-12-v2", "done");
     localStorage.setItem(
@@ -74,9 +89,9 @@ describe("App navigation", () => {
 
     await waitFor(() => {
       const saved = JSON.parse(localStorage.getItem("crystal-inventory-system:v1") ?? "{}");
-      expect(saved.materials).toEqual([]);
-      expect(saved.materialStocks).toEqual([]);
-      expect(saved.purchases).toEqual([]);
+      expect(saved.materials).toHaveLength(1);
+      expect(saved.materialStocks).toHaveLength(1);
+      expect(saved.purchases).toHaveLength(1);
     });
   });
 });

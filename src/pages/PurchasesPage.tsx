@@ -51,7 +51,7 @@ export function PurchasesPage({ data, setData }: PurchasesPageProps) {
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>进货批次</h2>
+          <h2>入库批次</h2>
           <p className="muted">规格只在这里和库存批次里记录，每次入库都会形成单独批次。</p>
         </div>
         <button className="primary-button" type="button" onClick={() => setIsOpen(true)}>
@@ -62,7 +62,7 @@ export function PurchasesPage({ data, setData }: PurchasesPageProps) {
       <DataTable
         rows={data.materialBatches ?? []}
         emptyText="当天没有入库批次。点右上角 + 入库 记录进货。"
-        exportFileName="进货批次"
+        exportFileName="入库批次"
         dateFilter={{ label: "入库日期", getDate: (row) => row.purchaseDate }}
         columns={[
           { header: "日期", render: (row) => row.purchaseDate, exportValue: (row) => row.purchaseDate },

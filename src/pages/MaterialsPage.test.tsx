@@ -165,6 +165,52 @@ describe("MaterialsPage", () => {
     expect(screen.getByText("测试货品1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "恢复" })).toBeInTheDocument();
   });
+
+  it("rejects duplicate catalog codes and deletes unused catalog entries only", async () => {
+    const user = userEvent.setup();
+    const setData = vi.fn();
+    const view = render(<MaterialsPage data={dataWithImage()} setData={setData} activeSection="groups" />);
+
+    await user.click(screen.getByRole("button", { name: "+ 新增大类" }));
+    await user.type(screen.getByLabelText("大类代号"), "HLB");
+    await user.type(screen.getByLabelText("大类名称"), "重复海蓝宝");
+    await user.click(screen.getByRole("button", { name: "保存大类" }));
+
+    expect(screen.getByText("代号已存在")).toBeInTheDocument();
+    expect(setData).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "删除海蓝宝" }));
+    expect(screen.getByText("已有货品使用，不能删除")).toBeInTheDocument();
+
+    view.rerender(<MaterialsPage data={dataWithUnusedCatalog()} setData={setData} activeSection="groups" />);
+    await user.click(screen.getByRole("button", { name: "删除白水晶" }));
+
+    const updater = setData.mock.calls[0][0] as (data: AppData) => AppData;
+    const next = updater(dataWithUnusedCatalog());
+
+    expect(next.materialGroups?.some((group) => group.id === "g2")).toBe(false);
+  });
+
+  it("filters subtypes by group and materials by color", async () => {
+    const user = userEvent.setup();
+    render(<MaterialsPage data={dataWithFilterCatalog()} setData={vi.fn()} activeSection="subtypes" />);
+
+    expect(screen.getByText("透体款")).toBeInTheDocument();
+    expect(screen.getByText("白幽灵")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("筛选大类"), "g1");
+
+    expect(screen.getByText("透体款")).toBeInTheDocument();
+    expect(screen.queryByText("白幽灵")).not.toBeInTheDocument();
+
+    const view = render(<MaterialsPage data={dataWithFilterCatalog()} setData={vi.fn()} activeSection="items" />);
+    await user.selectOptions(screen.getByLabelText("筛选颜色"), "c2");
+
+    expect(screen.getByText("白水晶圆珠")).toBeInTheDocument();
+    expect(screen.queryByText("海蓝宝圆珠")).not.toBeInTheDocument();
+
+    view.unmount();
+  });
 });
 
 function emptyData(): AppData {
@@ -250,4 +296,44 @@ function dataWithInactiveMaterial(): AppData {
       }
     ]
   } as AppData;
+}
+
+function dataWithUnusedCatalog(): AppData {
+  const data = dataWithImage();
+  return {
+    ...data,
+    materialGroups: [
+      ...(data.materialGroups ?? []),
+      { id: "g2", code: "BSJ", name: "白水晶", isActive: true }
+    ],
+    materialSubtypes: [
+      ...(data.materialSubtypes ?? []),
+      { id: "s2", groupId: "g2", code: "BYL", name: "白幽灵", isActive: true }
+    ]
+  };
+}
+
+function dataWithFilterCatalog(): AppData {
+  const data = dataWithUnusedCatalog();
+  return {
+    ...data,
+    materialColors: [
+      ...(data.materialColors ?? []),
+      { id: "c3", code: "CLEAR", name: "透明", isActive: true }
+    ],
+    materials: [
+      ...data.materials,
+      {
+        id: "m2",
+        name: "白水晶圆珠",
+        groupId: "g2",
+        subtypeId: "s2",
+        colorId: "c2",
+        lowStockThreshold: 10,
+        imageDataUrl: "",
+        notes: "",
+        isActive: true
+      }
+    ]
+  };
 }

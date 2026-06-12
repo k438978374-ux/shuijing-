@@ -27,6 +27,8 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
   const subtypes = getMaterialSubtypes(data);
   const colors = getMaterialColors(data);
   const [showInactive, setShowInactive] = useState(false);
+  const [subtypeFilterGroupId, setSubtypeFilterGroupId] = useState("");
+  const [materialFilterColorId, setMaterialFilterColorId] = useState("");
 
   const [isGroupOpen, setIsGroupOpen] = useState(false);
   const [groupCode, setGroupCode] = useState("");
@@ -108,6 +110,12 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
   const visibleMaterials = showInactive
     ? data.materials.filter((item) => !(item.isActive ?? true))
     : data.materials.filter((item) => item.isActive ?? true);
+  const filteredSubtypes = subtypeFilterGroupId
+    ? subtypes.filter((item) => item.groupId === subtypeFilterGroupId)
+    : subtypes;
+  const filteredMaterials = materialFilterColorId
+    ? visibleMaterials.filter((item) => item.colorId === materialFilterColorId)
+    : visibleMaterials;
   const targetMaterial = data.materials.find((item) => item.id === statusTargetId);
   const imageTargetMaterial = data.materials.find((item) => item.id === imageTargetId);
   const detailMaterial = data.materials.find((item) => item.id === detailMaterialId);
@@ -180,6 +188,10 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
       setError("请填写大类代号和名称");
       return;
     }
+    if (hasDuplicateCode(groups, groupCode)) {
+      setError("代号已存在");
+      return;
+    }
 
     const nextGroup: MaterialGroup = {
       id: createId("group"),
@@ -208,6 +220,10 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
       setError("请填写小类代号和名称");
       return;
     }
+    if (hasDuplicateCode(subtypes, subtypeCode)) {
+      setError("代号已存在");
+      return;
+    }
 
     const nextSubtype: MaterialSubtype = {
       id: createId("subtype"),
@@ -231,6 +247,10 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
     event.preventDefault();
     if (!colorCode.trim() || !colorName.trim()) {
       setError("请填写颜色代号和名称");
+      return;
+    }
+    if (hasDuplicateCode(colors, colorCode)) {
+      setError("代号已存在");
       return;
     }
 
@@ -276,6 +296,49 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
     setData((current) => ({ ...current, materials: [...current.materials, material] }));
     resetMaterialForm();
     setIsMaterialOpen(false);
+  }
+
+  function handleDeleteGroup(group: MaterialGroup) {
+    const linkedMaterials = data.materials.filter(
+      (material) => material.groupId === group.id || subtypes.some((subtype) => subtype.groupId === group.id && subtype.id === material.subtypeId)
+    );
+    if (linkedMaterials.length > 0) {
+      setError("已有货品使用，不能删除");
+      return;
+    }
+
+    setData((current) => ({
+      ...current,
+      materialGroups: (current.materialGroups ?? []).filter((item) => item.id !== group.id),
+      materialSubtypes: (current.materialSubtypes ?? []).filter((item) => item.groupId !== group.id)
+    }));
+    setError("");
+  }
+
+  function handleDeleteSubtype(subtype: MaterialSubtype) {
+    if (data.materials.some((material) => material.subtypeId === subtype.id)) {
+      setError("已有货品使用，不能删除");
+      return;
+    }
+
+    setData((current) => ({
+      ...current,
+      materialSubtypes: (current.materialSubtypes ?? []).filter((item) => item.id !== subtype.id)
+    }));
+    setError("");
+  }
+
+  function handleDeleteColor(color: MaterialColor) {
+    if (data.materials.some((material) => material.colorId === color.id)) {
+      setError("已有货品使用，不能删除");
+      return;
+    }
+
+    setData((current) => ({
+      ...current,
+      materialColors: (current.materialColors ?? []).filter((item) => item.id !== color.id)
+    }));
+    setError("");
   }
 
   function handleDetailSave(event: FormEvent) {
@@ -371,6 +434,32 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
             </button>
           ) : null}
           {activeSection === "subtypes" ? (
+            <label className="compact-filter">
+              <span>筛选大类</span>
+              <select value={subtypeFilterGroupId} onChange={(event) => setSubtypeFilterGroupId(event.target.value)}>
+                <option value="">全部</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {activeSection === "items" ? (
+            <label className="compact-filter">
+              <span>筛选颜色</span>
+              <select value={materialFilterColorId} onChange={(event) => setMaterialFilterColorId(event.target.value)}>
+                <option value="">全部</option>
+                {colors.map((color) => (
+                  <option key={color.id} value={color.id}>
+                    {color.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {activeSection === "subtypes" ? (
             <button className="primary-button" type="button" onClick={() => setIsSubtypeOpen(true)}>
               + 新增小类
             </button>
@@ -387,6 +476,9 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
           ) : null}
         </div>
       </div>
+      {error && !isGroupOpen && !isSubtypeOpen && !isColorOpen && !isMaterialOpen && !targetMaterial && !imageTargetMaterial && !detailMaterial ? (
+        <p className="error-text panel-error">{error}</p>
+      ) : null}
 
       {activeSection === "groups" ? (
         <DataTable
@@ -405,6 +497,14 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
               header: "货品数",
               render: (row) => data.materials.filter((item) => item.groupId === row.id).length,
               exportValue: (row) => data.materials.filter((item) => item.groupId === row.id).length
+            },
+            {
+              header: "操作",
+              render: (row) => (
+                <button className="text-button" type="button" onClick={() => handleDeleteGroup(row)} aria-label={`删除${row.name}`}>
+                  删除
+                </button>
+              )
             }
           ]}
         />
@@ -412,7 +512,7 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
 
       {activeSection === "subtypes" ? (
         <DataTable
-          rows={subtypes}
+          rows={filteredSubtypes}
           emptyText="还没有小类。先新增小类。"
           exportFileName="材料小类"
           columns={[
@@ -427,6 +527,14 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
               header: "货品数",
               render: (row) => data.materials.filter((item) => item.subtypeId === row.id).length,
               exportValue: (row) => data.materials.filter((item) => item.subtypeId === row.id).length
+            },
+            {
+              header: "操作",
+              render: (row) => (
+                <button className="text-button" type="button" onClick={() => handleDeleteSubtype(row)} aria-label={`删除${row.name}`}>
+                  删除
+                </button>
+              )
             }
           ]}
         />
@@ -444,6 +552,14 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
               header: "货品数",
               render: (row) => data.materials.filter((item) => item.colorId === row.id).length,
               exportValue: (row) => data.materials.filter((item) => item.colorId === row.id).length
+            },
+            {
+              header: "操作",
+              render: (row) => (
+                <button className="text-button" type="button" onClick={() => handleDeleteColor(row)} aria-label={`删除${row.name}`}>
+                  删除
+                </button>
+              )
             }
           ]}
         />
@@ -451,7 +567,7 @@ export function MaterialsPage({ data, setData, activeSection = "items" }: Materi
 
       {activeSection === "items" ? (
         <DataTable
-          rows={visibleMaterials}
+          rows={filteredMaterials}
           emptyText={showInactive ? "没有停用货品。" : "还没有在用货品。点右上角新增货品录入。"}
           exportFileName={showInactive ? "停用货品" : "货品目录"}
           columns={[
@@ -768,4 +884,9 @@ function Thumb({ src }: { src: string }) {
 
 function getStocks(data: AppData, materialId: string) {
   return data.materialStocks.filter((stock) => stock.materialId === materialId);
+}
+
+function hasDuplicateCode(items: Array<{ code: string }>, code: string) {
+  const normalizedCode = code.trim().toLowerCase();
+  return items.some((item) => item.code.trim().toLowerCase() === normalizedCode);
 }

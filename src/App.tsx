@@ -8,8 +8,8 @@ import {
   FileClock,
   Gem,
   Home,
+  Package,
   PackageCheck,
-  PackagePlus,
   ReceiptText,
   Search,
   ShoppingBag
@@ -21,6 +21,7 @@ import { AuditLogsPage } from "./pages/AuditLogsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { FinishedGoodsPage } from "./pages/FinishedGoodsPage";
 import { InventoryAdjustmentsPage } from "./pages/InventoryAdjustmentsPage";
+import { InventoryPage } from "./pages/InventoryPage";
 import { MaterialsPage } from "./pages/MaterialsPage";
 import { ProductionPage } from "./pages/ProductionPage";
 import { PurchasesPage } from "./pages/PurchasesPage";
@@ -34,6 +35,7 @@ type PageKey =
   | "dashboard"
   | "materials"
   | "purchases"
+  | "inventory"
   | "recipes"
   | "production"
   | "adjustments"
@@ -43,6 +45,7 @@ type PageKey =
   | "reports";
 
 type MaterialSectionKey = "groups" | "subtypes" | "colors" | "items";
+type InventorySectionKey = "purchases" | "inventory";
 
 type NavItem = {
   key: PageKey;
@@ -55,12 +58,13 @@ type SearchTarget = {
   label: string;
   page: PageKey;
   section?: MaterialSectionKey;
+  inventorySection?: InventorySectionKey;
 };
 
 const navItems: NavItem[] = [
   { key: "dashboard", label: "总览", icon: Home },
   { key: "materials", label: "材料", icon: Gem },
-  { key: "purchases", label: "进货", icon: PackagePlus },
+  { key: "purchases", label: "库存", icon: Package },
   { key: "recipes", label: "配方", icon: ClipboardList },
   { key: "production", label: "制作", icon: Boxes },
   { key: "adjustments", label: "调库", icon: PackageCheck },
@@ -77,23 +81,23 @@ const materialChildren: Array<{ key: MaterialSectionKey; label: string }> = [
   { key: "items", label: "货品" }
 ];
 
-const LOCAL_TEST_GOODS_CLEANUP_KEY = "crystal-inventory-system:cleared-test-goods-2026-06-12-v3";
+const inventoryChildren: Array<{ key: InventorySectionKey; label: string; page: PageKey }> = [
+  { key: "purchases", label: "入库", page: "purchases" },
+  { key: "inventory", label: "库存明细", page: "inventory" }
+];
 
 export function App() {
   const [activePage, setActivePage] = useState<PageKey>("dashboard");
   const [activeMaterialSection, setActiveMaterialSection] = useState<MaterialSectionKey>("items");
   const [isMaterialsExpanded, setIsMaterialsExpanded] = useState(true);
+  const [isInventoryExpanded, setIsInventoryExpanded] = useState(true);
   const [catalogQuery, setCatalogQuery] = useState("");
-  const [data, setDataState] = useState<AppData>(() => clearLocalTestGoodsOnce(loadData()));
+  const [data, setDataState] = useState<AppData>(() => loadData());
   const [isHydrated, setIsHydrated] = useState(false);
   const [syncMessage, setSyncMessage] = useState(() =>
     isCloudSyncEnabled() ? "正在连接云端存储..." : "当前仅使用本地存储"
   );
   const accessPassword = import.meta.env.VITE_ACCESS_PASSWORD ?? "";
-
-  useEffect(() => {
-    setDataState((current) => clearLocalTestGoodsOnce(current));
-  });
 
   useEffect(() => {
     let cancelled = false;
@@ -169,14 +173,22 @@ export function App() {
   }, [data, isHydrated]);
 
   const pageTitle = useMemo(
-    () => navItems.find((item) => item.key === activePage)?.label ?? "总览",
+    () => {
+      if (activePage === "purchases") {
+        return "入库";
+      }
+      if (activePage === "inventory") {
+        return "库存明细";
+      }
+      return navItems.find((item) => item.key === activePage)?.label ?? "总览";
+    },
     [activePage]
   );
 
   const searchTargets = useMemo<SearchTarget[]>(
     () => [
       ...navItems
-        .filter((item) => item.key !== "materials")
+        .filter((item) => item.key !== "materials" && item.key !== "purchases")
         .map((item) => ({ key: item.key, label: item.label, page: item.key })),
       { key: "materials", label: "材料", page: "materials" },
       ...materialChildren.map((item) => ({
@@ -184,6 +196,13 @@ export function App() {
         label: `材料 / ${item.label}`,
         page: "materials" as const,
         section: item.key
+      })),
+      { key: "stock", label: "库存", page: "purchases" },
+      ...inventoryChildren.map((item) => ({
+        key: `stock-${item.key}`,
+        label: `库存 / ${item.label}`,
+        page: item.page,
+        inventorySection: item.key
       }))
     ],
     []
@@ -206,6 +225,9 @@ export function App() {
     if (page === "materials") {
       setIsMaterialsExpanded(true);
     }
+    if (page === "purchases" || page === "inventory") {
+      setIsInventoryExpanded(true);
+    }
   }
 
   function handleMaterialsClick() {
@@ -223,10 +245,28 @@ export function App() {
     setIsMaterialsExpanded(true);
   }
 
+  function handleInventoryClick() {
+    if (activePage !== "purchases" && activePage !== "inventory") {
+      setActivePage("purchases");
+      setIsInventoryExpanded(true);
+      return;
+    }
+    setIsInventoryExpanded((current) => !current);
+  }
+
+  function openInventorySection(section: InventorySectionKey) {
+    setActivePage(section === "purchases" ? "purchases" : "inventory");
+    setIsInventoryExpanded(true);
+  }
+
   function handleSearchTargetClick(target: SearchTarget) {
     setCatalogQuery("");
     if (target.page === "materials" && target.section) {
       openMaterialSection(target.section);
+      return;
+    }
+    if (target.inventorySection) {
+      openInventorySection(target.inventorySection);
       return;
     }
     openPage(target.page);
@@ -273,6 +313,37 @@ export function App() {
                             }
                             type="button"
                             onClick={() => openMaterialSection(child.key)}
+                          >
+                            <span>{child.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              if (item.key === "purchases") {
+                return (
+                  <div className="nav-group" key={item.key}>
+                    <button
+                      className={activePage === "purchases" || activePage === "inventory" ? "nav-item active" : "nav-item"}
+                      type="button"
+                      onClick={handleInventoryClick}
+                      title={item.label}
+                    >
+                      <Icon size={18} />
+                      <span>{item.label}</span>
+                      {isInventoryExpanded ? <ChevronDown className="nav-chevron" size={16} /> : <ChevronRight className="nav-chevron" size={16} />}
+                    </button>
+                    {isInventoryExpanded ? (
+                      <div className="nav-sublist">
+                        {inventoryChildren.map((child) => (
+                          <button
+                            key={child.key}
+                            className={activePage === child.page ? "nav-subitem active" : "nav-subitem"}
+                            type="button"
+                            onClick={() => openInventorySection(child.key)}
                           >
                             <span>{child.label}</span>
                           </button>
@@ -335,6 +406,7 @@ export function App() {
             <MaterialsPage data={data} setData={setData} activeSection={activeMaterialSection} />
           ) : null}
           {activePage === "purchases" ? <PurchasesPage data={data} setData={setData} /> : null}
+          {activePage === "inventory" ? <InventoryPage data={data} /> : null}
           {activePage === "recipes" ? <RecipesPage data={data} setData={setData} /> : null}
           {activePage === "production" ? <ProductionPage data={data} setData={setData} /> : null}
           {activePage === "adjustments" ? <InventoryAdjustmentsPage data={data} setData={setData} /> : null}
@@ -346,27 +418,4 @@ export function App() {
       </div>
     </AccessGate>
   );
-}
-
-function clearLocalTestGoodsOnce(data: AppData): AppData {
-  if (isCloudSyncEnabled() || localStorage.getItem(LOCAL_TEST_GOODS_CLEANUP_KEY) === "done") {
-    return data;
-  }
-
-  const clearedData = {
-    ...data,
-    materials: [],
-    materialStocks: [],
-    materialBatches: [],
-    purchases: [],
-    recipes: [],
-    productions: [],
-    finishedGoods: [],
-    sales: []
-  };
-
-  saveData(clearedData);
-  localStorage.setItem(LOCAL_TEST_GOODS_CLEANUP_KEY, "done");
-
-  return clearedData;
 }
