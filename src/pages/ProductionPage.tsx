@@ -147,7 +147,7 @@ export function ProductionPage({ data, setData }: ProductionPageProps) {
                 <option value="">请选择</option>
                 {data.recipes.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.name}
+                    {formatRecipeOption(item.name, item.wristSizeCm)}
                   </option>
                 ))}
               </select>
@@ -243,4 +243,8 @@ function getMaterialSpecifications(data: AppData, materialId: string): string[] 
   return Array.from(
     new Set(data.materialStocks.filter((stock) => stock.materialId === materialId).map((stock) => stock.specification))
   );
+}
+
+function formatRecipeOption(name: string, wristSizeCm?: string) {
+  return wristSizeCm?.trim() ? `${name} / ${wristSizeCm.trim()}cm` : name;
 }

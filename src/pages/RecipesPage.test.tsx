@@ -14,6 +14,7 @@ describe("RecipesPage", () => {
 
     await user.click(screen.getByRole("button", { name: "+ 新配方" }));
     await user.type(screen.getByLabelText("款式名称"), "粉晶款");
+    await user.type(screen.getByLabelText("手尾尺寸/cm"), "15.5");
     await user.click(screen.getByRole("button", { name: "添加材料" }));
 
     expect(screen.getByLabelText("材料")).toHaveDisplayValue("粉晶 / 透体款");
@@ -29,6 +30,33 @@ describe("RecipesPage", () => {
       specification: "8mm",
       quantity: 1
     });
+    expect(next.recipes[0].wristSizeCm).toBe("15.5");
+  });
+
+  it("shows recipe wrist size in the recipe table", () => {
+    render(
+      <RecipesPage
+        data={{
+          ...dataWithSizedMaterial(),
+          recipes: [
+            {
+              id: "r1",
+              name: "粉晶款",
+              wristSizeCm: "15.5",
+              materialLines: [{ materialId: "m1", specification: "8mm", quantity: 1 }],
+              packagingCostPerUnit: 3,
+              laborCostPerUnit: 8,
+              suggestedSalePrice: 68,
+              imageDataUrl: "",
+              notes: ""
+            }
+          ]
+        }}
+        setData={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("15.5cm")).toBeInTheDocument();
   });
 
   it("shows active unstocked materials in recipe options but hides inactive materials", async () => {

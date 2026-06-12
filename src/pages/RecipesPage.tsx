@@ -16,6 +16,7 @@ interface RecipesPageProps {
 export function RecipesPage({ data, setData }: RecipesPageProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
+  const [wristSizeCm, setWristSizeCm] = useState("");
   const [materialLines, setMaterialLines] = useState<MaterialLine[]>([]);
   const [packagingCostPerUnit, setPackagingCostPerUnit] = useState(3);
   const [laborCostPerUnit, setLaborCostPerUnit] = useState(8);
@@ -68,6 +69,7 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
     const recipe: Recipe = {
       id: createId("recipe"),
       name: name.trim(),
+      wristSizeCm: wristSizeCm.trim(),
       materialLines,
       packagingCostPerUnit,
       laborCostPerUnit,
@@ -77,6 +79,7 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
     };
     setData((current) => ({ ...current, recipes: [...current.recipes, recipe] }));
     setName("");
+    setWristSizeCm("");
     setMaterialLines([]);
     setPackagingCostPerUnit(3);
     setLaborCostPerUnit(8);
@@ -106,6 +109,7 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
         columns={[
           { header: "图片", render: (row) => (row.imageDataUrl ? <img className="table-thumb" src={row.imageDataUrl} alt="" /> : <span className="muted">无</span>), exportValue: () => "" },
           { header: "名称", render: (row) => <strong>{row.name}</strong>, exportValue: (row) => row.name },
+          { header: "手尾尺寸/cm", render: (row) => formatSize(row.wristSizeCm, "cm"), exportValue: (row) => row.wristSizeCm ?? "" },
           { header: "材料", render: (row) => row.materialLines.map((line) => formatMaterialLine(data, line)).join("；"), exportValue: (row) => row.materialLines.map((line) => formatMaterialLine(data, line)).join("；") },
           { header: "预计成本", render: (row) => formatRecipeCost(data, row), exportValue: (row) => formatRecipeCost(data, row) },
           { header: "建议售价", render: (row) => `¥${row.suggestedSalePrice.toFixed(2)}`, exportValue: (row) => row.suggestedSalePrice.toFixed(2) },
@@ -117,6 +121,9 @@ export function RecipesPage({ data, setData }: RecipesPageProps) {
         <form className="form-grid" onSubmit={handleSubmit}>
           <FormField label="款式名称">
             <input value={name} onChange={(event) => setName(event.target.value)} />
+          </FormField>
+          <FormField label="手尾尺寸/cm">
+            <input inputMode="decimal" value={wristSizeCm} onChange={(event) => setWristSizeCm(event.target.value)} />
           </FormField>
           <div className="form-field">
             <span>材料明细</span>
@@ -235,4 +242,8 @@ function formatRecipeCost(data: AppData, recipe: Recipe) {
     recipe.suggestedSalePrice
   );
   return preview.ok ? `¥${preview.totalCost.toFixed(2)}` : "待入库";
+}
+
+function formatSize(value: string | undefined, unit: string) {
+  return value?.trim() ? `${value.trim()}${unit}` : "-";
 }

@@ -50,6 +50,7 @@ describe("MaterialsPage", () => {
     view.rerender(<MaterialsPage data={withSubtype} setData={setData} activeSection="items" />);
 
     await user.click(screen.getByRole("button", { name: "+ 新增货品" }));
+    expect(screen.queryByLabelText("尺寸/mm")).not.toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText("选择大类"), createdGroup.id);
     await user.selectOptions(screen.getByLabelText("选择小类"), createdSubtype.id);
     await user.selectOptions(screen.getByLabelText("选择颜色"), createdColor.id);

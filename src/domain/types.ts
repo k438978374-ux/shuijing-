@@ -121,6 +121,7 @@ export interface AuditLog {
 export interface Recipe {
   id: string;
   name: string;
+  wristSizeCm?: string;
   materialLines: MaterialLine[];
   packagingCostPerUnit: number;
   laborCostPerUnit: number;

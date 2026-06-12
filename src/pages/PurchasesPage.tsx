@@ -2,9 +2,9 @@ import { useMemo, useState, type FormEvent } from "react";
 import { DataTable } from "../components/DataTable";
 import { FormField } from "../components/FormField";
 import { Modal } from "../components/Modal";
-import { formatMaterialName } from "../domain/materialCatalog";
+import { formatMaterialName, getColorById, getGroupById, getSubtypeById } from "../domain/materialCatalog";
 import { applyPurchase } from "../domain/inventory";
-import type { AppData } from "../domain/types";
+import type { AppData, Material } from "../domain/types";
 import { todayDateString } from "../utils/dateFilter";
 
 interface PurchasesPageProps {
@@ -16,7 +16,7 @@ export function PurchasesPage({ data, setData }: PurchasesPageProps) {
   const activeMaterials = useMemo(() => data.materials.filter((material) => material.isActive ?? true), [data.materials]);
   const [isOpen, setIsOpen] = useState(false);
   const [materialId, setMaterialId] = useState(activeMaterials[0]?.id ?? "");
-  const [specification, setSpecification] = useState("8mm");
+  const [sizeMm, setSizeMm] = useState("8");
   const [quantity, setQuantity] = useState(1);
   const [totalCost, setTotalCost] = useState(1);
   const [purchaseDate, setPurchaseDate] = useState(todayDateString());
@@ -29,7 +29,7 @@ export function PurchasesPage({ data, setData }: PurchasesPageProps) {
       setData((current) =>
         applyPurchase(current, {
           materialId,
-          specification,
+          specification: formatSizeSpecification(sizeMm),
           quantity,
           totalCost,
           purchaseDate,
@@ -67,11 +67,26 @@ export function PurchasesPage({ data, setData }: PurchasesPageProps) {
         columns={[
           { header: "日期", render: (row) => row.purchaseDate, exportValue: (row) => row.purchaseDate },
           {
-            header: "货品",
-            render: (row) => formatMaterialName(data.materials.find((item) => item.id === row.materialId), data),
-            exportValue: (row) => formatMaterialName(data.materials.find((item) => item.id === row.materialId), data)
+            header: "大类",
+            render: (row) => getMaterialGroupName(data, getPurchaseMaterial(data, row.materialId)),
+            exportValue: (row) => getMaterialGroupName(data, getPurchaseMaterial(data, row.materialId))
           },
-          { header: "规格", render: (row) => row.specification, exportValue: (row) => row.specification },
+          {
+            header: "小类",
+            render: (row) => getMaterialSubtypeName(data, getPurchaseMaterial(data, row.materialId)),
+            exportValue: (row) => getMaterialSubtypeName(data, getPurchaseMaterial(data, row.materialId))
+          },
+          {
+            header: "颜色",
+            render: (row) => getMaterialColorName(data, getPurchaseMaterial(data, row.materialId)),
+            exportValue: (row) => getMaterialColorName(data, getPurchaseMaterial(data, row.materialId))
+          },
+          {
+            header: "货品名称",
+            render: (row) => getPurchaseMaterial(data, row.materialId)?.name ?? "已删除货品",
+            exportValue: (row) => getPurchaseMaterial(data, row.materialId)?.name ?? "已删除货品"
+          },
+          { header: "尺寸/mm", render: (row) => stripMm(row.specification), exportValue: (row) => stripMm(row.specification) },
           { header: "原数量", render: (row) => row.originalQuantity, exportValue: (row) => row.originalQuantity },
           { header: "剩余", render: (row) => row.currentQuantity, exportValue: (row) => row.currentQuantity },
           { header: "单颗成本", render: (row) => `¥${row.unitCost.toFixed(2)}`, exportValue: (row) => row.unitCost.toFixed(2) },
@@ -82,7 +97,7 @@ export function PurchasesPage({ data, setData }: PurchasesPageProps) {
 
       <Modal title="记录入库" description="先选货品，再录规格、数量和成本。" isOpen={isOpen} onClose={() => setIsOpen(false)}>
         <form className="form-grid" onSubmit={handleSubmit}>
-          <FormField label="材料">
+          <FormField label="货品">
             <select value={materialId} onChange={(event) => setMaterialId(event.target.value)}>
               <option value="">请选择</option>
               {activeMaterials.map((material) => (
@@ -92,14 +107,8 @@ export function PurchasesPage({ data, setData }: PurchasesPageProps) {
               ))}
             </select>
           </FormField>
-          <FormField label="规格">
-            <select value={specification} onChange={(event) => setSpecification(event.target.value)}>
-              {beadSizes.map((size) => (
-                <option key={size} value={`${size}mm`}>
-                  {size}mm
-                </option>
-              ))}
-            </select>
+          <FormField label="尺寸/mm">
+            <input inputMode="decimal" value={sizeMm} onChange={(event) => setSizeMm(event.target.value)} />
           </FormField>
           <FormField label="数量">
             <input min="1" type="number" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} />
@@ -123,4 +132,27 @@ export function PurchasesPage({ data, setData }: PurchasesPageProps) {
   );
 }
 
-const beadSizes = Array.from({ length: 15 }, (_, index) => index + 2);
+function formatSizeSpecification(value: string) {
+  const normalized = value.trim().replace(/mm$/i, "");
+  return normalized ? `${normalized}mm` : "";
+}
+
+function stripMm(value: string) {
+  return value.replace(/mm$/i, "");
+}
+
+function getPurchaseMaterial(data: AppData, materialId: string): Material | undefined {
+  return data.materials.find((item) => item.id === materialId);
+}
+
+function getMaterialGroupName(data: AppData, material: Material | undefined) {
+  return getGroupById(data, material?.groupId)?.name ?? "-";
+}
+
+function getMaterialSubtypeName(data: AppData, material: Material | undefined) {
+  return getSubtypeById(data, material?.subtypeId)?.name ?? material?.subtype ?? "-";
+}
+
+function getMaterialColorName(data: AppData, material: Material | undefined) {
+  return getColorById(data, material?.colorId)?.name ?? "-";
+}
